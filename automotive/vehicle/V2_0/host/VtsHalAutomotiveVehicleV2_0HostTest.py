@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.4
+#!/usr/bin/env python
 #
 # Copyright (C) 2016 The Android Open Source Project
 #
@@ -28,7 +28,7 @@ from vts.utils.python.profiling import profiling_utils
 from vts.utils.python.coverage import coverage_utils
 
 
-class VehicleHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
+class VtsHalAutomotiveVehicleV2_0HostTest(base_test_with_webdb.BaseTestWithWebDbClass):
     """A simple testcase for the VEHICLE HIDL HAL."""
 
     def setUpClass(self):
@@ -57,6 +57,8 @@ class VehicleHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
         self.vehicle.SetCallerUid(system_uid)
         self.vtypes = self.dut.hal.vehicle.GetHidlTypeInterface("types")
         logging.info("vehicle types: %s", self.vtypes)
+        asserts.assertEqual(0x00ff0000, self.vtypes.VehiclePropertyType.MASK)
+        asserts.assertEqual(0x0f000000, self.vtypes.VehicleArea.MASK)
 
     def tearDownClass(self):
         """Disables the profiling.
@@ -93,8 +95,9 @@ class VehicleHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
 
     def testMandatoryProperties(self):
         """Verifies that all mandatory properties are supported."""
-        mandatoryProps = set([self.vtypes.DRIVING_STATUS])  # 1 property so far
-        logging.info(self.vtypes.DRIVING_STATUS)
+        # 1 property so far
+        mandatoryProps = set([self.vtypes.VehicleProperty.DRIVING_STATUS])
+        logging.info(self.vtypes.VehicleProperty.DRIVING_STATUS)
         allConfigs = self.dut.hal.vehicle.getAllPropConfigs()
 
         for config in allConfigs:
@@ -107,13 +110,37 @@ class VehicleHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
         isLiveSupported, isFreezeSupported = False, False
         allConfigs = self.vehicle.getAllPropConfigs()
         for config in allConfigs:
-            if config['prop'] == self.vtypes.OBD2_LIVE_FRAME:
+            if config['prop'] == self.vtypes.VehicleProperty.OBD2_LIVE_FRAME:
                 isLiveSupported = True
-            elif config['prop'] == self.vtypes.OBD2_FREEZE_FRAME:
+            elif config['prop'] == self.vtypes.VehicleProperty.OBD2_FREEZE_FRAME:
                 isFreezeSupported = True
             if isLiveSupported and isFreezeSupported:
                 break
         return isLiveSupported, isFreezeSupported
+
+    def emptyValueProperty(self, propertyId, areaId=0):
+        """Creates a property structure for use with the Vehicle HAL.
+
+        Args:
+            propertyId: the numeric identifier of the output property.
+            areaId: the numeric identifier of the vehicle area of the output
+                    property. 0, or omitted, for global.
+
+        Returns:
+            a property structure for use with the Vehicle HAL.
+        """
+        return {
+            'prop' : propertyId,
+            'timestamp' : 0,
+            'areaId' : areaId,
+            'value' : {
+                'int32Values' : [],
+                'floatValues' : [],
+                'int64Values' : [],
+                'bytes' : [],
+                'stringValue' : ""
+            }
+        }
 
     def readVhalProperty(self, propertyId, areaId=0):
         """Reads a specified property from Vehicle HAL.
@@ -127,25 +154,59 @@ class VehicleHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
             the value of the property as read from Vehicle HAL, or None
             if it could not read successfully.
         """
-        vp_dict = {
-            'prop' : propertyId,
-            'timestamp' : 0,
-            'areaId' : areaId,
-            'value' : {
-                'int32Values' : [],
-                'floatValues' : [],
-                'int64Values' : [],
-                'bytes' : [],
-                'stringValue' : ""
-            }
-        }
-        vp = self.vtypes.Py2Pb("VehiclePropValue", vp_dict)
+        vp = self.vtypes.Py2Pb("VehiclePropValue",
+                               self.emptyValueProperty(propertyId, areaId))
+        logging.info("0x%08X get request: %s", propertyId, vp)
         status, value = self.vehicle.get(vp)
-        if self.vtypes.OK == status:
+        logging.info("0x%08X get response: %s, %s", propertyId, status, value)
+        if self.vtypes.StatusCode.OK == status:
             return value
         else:
-            logging.warning("attempt to read property %s returned error %d",
+            logging.warning("attempt to read property 0x%08X returned error %d",
                             propertyId, status)
+
+    def setVhalProperty(self, propertyId, value, areaId=0,
+                        expectedStatus=0):
+        """Sets a specified property in the Vehicle HAL.
+
+        Args:
+            propertyId: the numeric identifier of the property to be set.
+            value: the value of the property, formatted as per the Vehicle HAL
+                   (use emptyValueProperty() as a helper).
+            areaId: the numeric identifier of the vehicle area to set the
+                    property for. 0, or omitted, for global.
+            expectedStatus: the StatusCode expected to be returned from setting
+                    the property. 0, or omitted, for OK.
+        """
+        propValue = self.emptyValueProperty(propertyId, areaId)
+        for k in propValue["value"]:
+            if k in value:
+                if k == "stringValue":
+                    propValue["value"][k] += value[k]
+                else:
+                    propValue["value"][k].extend(value[k])
+        vp = self.vtypes.Py2Pb("VehiclePropValue", propValue)
+        logging.info("0x%08X set request: %s", propertyId, vp)
+        status = self.vehicle.set(vp)
+        logging.info("0x%08X set response: %s", propertyId, status)
+        if 0 == expectedStatus:
+            expectedStatus = self.vtypes.StatusCode.OK
+        asserts.assertEqual(expectedStatus, status)
+
+    def setAndVerifyIntProperty(self, propertyId, value, areaId=0):
+        """Sets a integer property in the Vehicle HAL and reads it back.
+
+        Args:
+            propertyId: the numeric identifier of the property to be set.
+            value: the int32 value of the property to be set.
+            areaId: the numeric identifier of the vehicle area to set the
+                    property for. 0, or omitted, for global.
+        """
+        self.setVhalProperty(propertyId, {"int32Values" : [value]})
+
+        propValue = self.readVhalProperty(propertyId)
+        asserts.assertEqual(1, len(propValue["value"]["int32Values"]))
+        asserts.assertEqual(value, propValue["value"]["int32Values"][0])
 
     def testObd2SensorProperties(self):
         """Test reading the live and freeze OBD2 frame properties.
@@ -188,14 +249,14 @@ class VehicleHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
         def checkLiveFrameRead():
             """Validates reading the OBD2_LIVE_FRAME (if available)."""
             checker = CheckRead(self,
-                                self.vtypes.OBD2_LIVE_FRAME,
+                                self.vtypes.VehicleProperty.OBD2_LIVE_FRAME,
                                 "OBD2_LIVE_FRAME")
             checker()
 
         def checkFreezeFrameRead():
             """Validates reading the OBD2_FREEZE_FRAME (if available)."""
             checker = CheckRead(self,
-                                self.vtypes.OBD2_FREEZE_FRAME,
+                                self.vtypes.VehicleProperty.OBD2_FREEZE_FRAME,
                                 "OBD2_FREEZE_FRAME")
             checker()
 
@@ -207,39 +268,109 @@ class VehicleHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
         if isFreezeSupported:
             checkFreezeFrameRead()
 
-    def createVehiclePropValue(self, propId):
-        value = {
-            "int32Values" : [],
-            "floatValues" : [],
-            "int64Values" : [],
-            "bytes": [],
-            "stringValue": ""
-        }
-        propValue = {
-            "prop": propId,
-            "timestamp": 0,
-            "areaId": 0,
-            "value": value
-        }
-        return self.vtypes.Py2Pb("VehiclePropValue", propValue)
-
     def testDrivingStatus(self):
         """Checks that DRIVING_STATUS property returns correct result."""
-        request = self.createVehiclePropValue(self.vtypes.DRIVING_STATUS)
-        logging.info("Driving status request: %s", request)
-        response = self.vehicle.get(request)
-        logging.info("Driving status response: %s", response)
-        status = response[0]
-        asserts.assertEqual(self.vtypes.OK, status)
-        propValue = response[1]
-        assertEqual(1, len(propValue.value.int32Values))
-        drivingStatus = propValue.value.int32Values[0]
+        propValue = self.readVhalProperty(
+            self.vtypes.VehicleProperty.DRIVING_STATUS)
+        asserts.assertEqual(1, len(propValue["value"]["int32Values"]))
+        drivingStatus = propValue["value"]["int32Values"][0]
 
-        allStatuses = (self.vtypes.UNRESTRICTED | self.vtypes.NO_VIDEO
-               | self.vtypes.NO_KEYBOARD_INPUT | self.vtypes.NO_VOICE_INPUT
-               | self.vtypes.NO_CONFIG | self.vtypes.LIMIT_MESSAGE_LEN)
+        allStatuses = (self.vtypes.VehicleDrivingStatus.UNRESTRICTED
+                       | self.vtypes.VehicleDrivingStatus.NO_VIDEO
+                       | self.vtypes.VehicleDrivingStatus.NO_KEYBOARD_INPUT
+                       | self.vtypes.VehicleDrivingStatus.NO_VOICE_INPUT
+                       | self.vtypes.VehicleDrivingStatus.NO_CONFIG
+                       | self.vtypes.VehicleDrivingStatus.LIMIT_MESSAGE_LEN)
 
-        assertEqual(allStatuses, allStatuses | drivingStatus)
+        asserts.assertEqual(allStatuses, allStatuses | drivingStatus)
+
+    def testHvacPowerOn(self):
+        """Test power on/off and properties associated with it.
+
+        Gets the list of properties that are affected by the HVAC power state
+        and validates them.
+
+        Turns power on to start in a defined state, verifies that power is on
+        and properties are available.  State change from on->off and verifies
+        that properties are no longer available, then state change again from
+        off->on to verify properties are now available again.
+        """
+
+        # Checks that HVAC_POWER_ON property is supported and returns valid
+        # result initially.
+        propValue = self.readVhalProperty(
+            self.vtypes.VehicleProperty.HVAC_POWER_ON)
+        if propValue is None:
+            logging.info("HVAC_POWER_ON not supported")
+            return
+        asserts.assertEqual(1, len(propValue["value"]["int32Values"]))
+        asserts.assertTrue(
+            propValue["value"]["int32Values"][0] in [0, 1],
+            "%d not a valid value for HVAC_POWER_ON" %
+                propValue["value"]["int32Values"][0]
+            )
+
+        # Checks that HVAC_POWER_ON config string returns valid result.
+        requestConfig = [self.vtypes.Py2Pb(
+            "VehicleProperty", self.vtypes.VehicleProperty.HVAC_POWER_ON)]
+        logging.info("HVAC power on config request: %s", requestConfig)
+        responseConfig = self.vehicle.getPropConfigs(requestConfig)
+        logging.info("HVAC power on config response: %s", responseConfig)
+        hvacTypes = set([
+            self.vtypes.VehicleProperty.HVAC_FAN_SPEED,
+            self.vtypes.VehicleProperty.HVAC_FAN_DIRECTION,
+            self.vtypes.VehicleProperty.HVAC_TEMPERATURE_CURRENT,
+            self.vtypes.VehicleProperty.HVAC_TEMPERATURE_SET,
+            self.vtypes.VehicleProperty.HVAC_DEFROSTER,
+            self.vtypes.VehicleProperty.HVAC_AC_ON,
+            self.vtypes.VehicleProperty.HVAC_MAX_AC_ON,
+            self.vtypes.VehicleProperty.HVAC_MAX_DEFROST_ON,
+            self.vtypes.VehicleProperty.HVAC_RECIRC_ON,
+            self.vtypes.VehicleProperty.HVAC_DUAL_ON,
+            self.vtypes.VehicleProperty.HVAC_AUTO_ON,
+            self.vtypes.VehicleProperty.HVAC_ACTUAL_FAN_SPEED_RPM,
+        ])
+        status = responseConfig[0]
+        asserts.assertEqual(self.vtypes.StatusCode.OK, status)
+        configString = responseConfig[1][0]["configString"]
+        configProps = []
+        if configString != "":
+            for prop in configString.split(","):
+                configProps.append(int(prop, 16))
+        for prop in configProps:
+            asserts.assertTrue(prop in hvacTypes,
+                               "0x%X not an HVAC type" % prop)
+
+        # Turn power on.
+        self.setAndVerifyIntProperty(
+            self.vtypes.VehicleProperty.HVAC_POWER_ON, 1)
+
+        # Check that properties that require power to be on can be set.
+        propVals = {}
+        for prop in configProps:
+            v = self.readVhalProperty(prop)["value"]
+            self.setVhalProperty(prop, v)
+            # Save the value for use later when trying to set the property when
+            # HVAC is off.
+            propVals[prop] = v
+
+        # Turn power off.
+        self.setAndVerifyIntProperty(
+            self.vtypes.VehicleProperty.HVAC_POWER_ON, 0)
+
+        # Check that properties that require power to be on can't be set.
+        for prop in configProps:
+            self.setVhalProperty(
+                prop, propVals[prop],
+                expectedStatus=self.vtypes.StatusCode.NOT_AVAILABLE)
+
+        # Turn power on.
+        self.setAndVerifyIntProperty(
+            self.vtypes.VehicleProperty.HVAC_POWER_ON, 1)
+
+        # Check that properties that require power to be on can be set.
+        for prop in configProps:
+            self.setVhalProperty(prop, propVals[prop])
 
     def testPropertyRanges(self):
         """Retrieve the property ranges for all areas.
@@ -250,6 +381,14 @@ class VehicleHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
         configs = self.vehicle.getAllPropConfigs()
         logging.info("Property list response: %s", configs)
         for c in configs:
+            # Continuous properties need to have a sampling frequency.
+            if c["changeMode"] & self.vtypes.CONTINUOUS != 0:
+                asserts.assertLess(0.0, c["minSampleRate"])
+                asserts.assertLess(0.0, c["maxSampleRate"])
+                asserts.assertFalse(c["minSampleRate"] > c["maxSampleRate"],
+                                    "Prop 0x%x minSampleRate > maxSampleRate" %
+                                        c["prop"])
+
             areasFound = 0
             for a in c["areaConfigs"]:
                 # Make sure this doesn't override one of the other areas found.
