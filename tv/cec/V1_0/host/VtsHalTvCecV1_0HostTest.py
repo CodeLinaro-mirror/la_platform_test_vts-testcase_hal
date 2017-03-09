@@ -19,16 +19,14 @@ import logging
 
 from vts.proto import ComponentSpecificationMessage_pb2 as CompSpecMsg
 from vts.runners.host import asserts
-from vts.runners.host import base_test_with_webdb
+from vts.runners.host import base_test
 from vts.runners.host import const
 from vts.runners.host import keys
 from vts.runners.host import test_runner
 from vts.utils.python.controllers import android_device
-from vts.utils.python.coverage import coverage_utils
-from vts.utils.python.profiling import profiling_utils
 
 
-class TvCecHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
+class TvCecHidlTest(base_test.BaseTestClass):
     """Host testcase class for the TV HDMI_CEC HIDL HAL."""
 
     def setUpClass(self):
@@ -41,11 +39,12 @@ class TvCecHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
         self.dut.shell.one.Execute(
             "setprop vts.hal.vts.hidl.get_stub true")
 
-        if getattr(self, keys.ConfigKeys.IKEY_ENABLE_COVERAGE, False):
-            coverage_utils.InitializeDeviceCoverage(self.dut)
+        if self.coverage.enabled:
+            self.coverage.LoadArtifacts()
+            self.coverage.InitializeDeviceCoverage(self.dut)
 
-        if self.enable_profiling:
-            profiling_utils.EnableVTSProfiling(self.dut.shell.one)
+        if self.profiling.enabled:
+            self.profiling.EnableVTSProfiling(self.dut.shell.one)
 
         self.dut.hal.InitHidlHal(
             target_type="tv_cec",
@@ -55,40 +54,52 @@ class TvCecHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
             target_component_name="IHdmiCec",
             bits=64 if self.dut.is64Bit else 32)
 
+        self.vtypes = self.dut.hal.tv_cec.GetHidlTypeInterface("types")
+        logging.info("tv_cec types: %s", self.vtypes)
+
     def setUpTest(self):
         """Setup function that will be called every time before executing each
         test case in the test class."""
-        if self.enable_profiling:
-            profiling_utils.EnableVTSProfiling(self.dut.shell.one)
+        if self.profiling.enabled:
+            self.profiling.EnableVTSProfiling(self.dut.shell.one)
 
     def tearDownTest(self):
         """TearDown function that will be called every time after executing each
         test case in the test class."""
-        if self.enable_profiling:
-            profiling_trace_path = getattr(
-                self, self.VTS_PROFILING_TRACING_PATH, "")
-            self.ProcessTraceDataForTestCase(self.dut, profiling_trace_path)
-            profiling_utils.DisableVTSProfiling(self.dut.shell.one)
+        if self.profiling.enabled:
+            self.profiling.ProcessTraceDataForTestCase(self.dut)
+            self.profiling.DisableVTSProfiling(self.dut.shell.one)
 
     def tearDownClass(self):
         """To be executed when all test cases are finished."""
-        if getattr(self, keys.ConfigKeys.IKEY_ENABLE_COVERAGE, False):
-            self.SetCoverageData(coverage_utils.GetGcdaDict(self.dut))
+        if self.coverage.enabled:
+            self.coverage.SetCoverageData(dut=self.dut, isGlobal=True)
 
-        if self.enable_profiling:
-            self.ProcessAndUploadTraceData()
+        if self.profiling.enabled:
+            self.profiling.ProcessAndUploadTraceData()
 
-    def testGetCecVersion1(self):
-        """A simple test case which queries the cec version."""
-        logging.info('DIR HAL %s', dir(self.dut.hal))
-        version = self.dut.hal.tv_cec.getCecVersion()
-        logging.info('Cec version: %s', version)
+    def testAddAndClearLogicalAddress(self):
+        """A simple test case which sets logical address and clears it."""
+        result = self.dut.hal.tv_cec.addLogicalAddress(
+                self.vtypes.CecLogicalAddress.PLAYBACK_2)
+        asserts.assertEqual(self.vtypes.Result.SUCCESS, status)
+        logging.info("addLogicalAddress result: %s", result)
+
+        self.dut.hal.tv_cec.clearLogicalAddress()
+
+        result = self.dut.hal.tv_cec.addLogicalAddress(
+                self.vtypes.CecLogicalAddress.PLAYBACK_3)
+        asserts.assertEqual(self.vtypes.Result.SUCCESS, status)
+        logging.info("addLogicalAddress result: %s", result)
+
+    def testGetPhysicalAddress(self):
+        """A simple test case which queries the physical address."""
+        status, paddr = self.dut.hal.tv_cec.getPhysicalAddress()
+        asserts.assertEqual(self.vtypes.Result.SUCCESS, status)
+        logging.info("getPhysicalAddress status: %s, paddr: %s", status, paddr)
 
     def testSendRandomMessage(self):
         """A test case which sends a random message."""
-        self.vtypes = self.dut.hal.tv_cec.GetHidlTypeInterface("types")
-        logging.info("tv_cec types: %s", self.vtypes)
-
         cec_message = {
             "initiator": self.vtypes.CecLogicalAddress.TV,
             "destination": self.vtypes.CecLogicalAddress.PLAYBACK_1,
@@ -97,7 +108,47 @@ class TvCecHidlTest(base_test_with_webdb.BaseTestWithWebDbClass):
         message = self.vtypes.Py2Pb("CecMessage", cec_message)
         logging.info("message: %s", message)
         result = self.dut.hal.tv_cec.sendMessage(message)
-        logging.info('sendMessage result: %s', result)
+        logging.info("sendMessage result: %s", result)
+
+    def testGetCecVersion1(self):
+        """A simple test case which queries the cec version."""
+        version = self.dut.hal.tv_cec.getCecVersion()
+        logging.info("getCecVersion version: %s", version)
+
+    def testGetVendorId(self):
+        """A simple test case which queries vendor id."""
+        vendor_id = self.dut.hal.tv_cec.getVendorId()
+        asserts.assertEqual(0, 0xff000000 & vendor_id)
+        logging.info("getVendorId vendor_id: %s", vendor_id)
+
+    def testGetPortInfo(self):
+        """A simple test case which queries port information."""
+        port_infos = self.dut.hal.tv_cec.getPortInfo()
+        logging.info("getPortInfo port_infos: %s", port_infos)
+
+    def testSetOption(self):
+        """A simple test case which changes CEC options."""
+        self.dut.hal.tv_cec.setOption(self.vtypes.OptionKey.WAKEUP, True)
+        self.dut.hal.tv_cec.setOption(self.vtypes.OptionKey.ENABLE_CEC, True)
+        self.dut.hal.tv_cec.setOption(
+                self.vtypes.OptionKey.SYSTEM_CEC_CONTROL, True)
+
+    def testSetLanguage(self):
+        """A simple test case which updates language information."""
+        self.dut.hal.tv_cec.setLanguage("eng")
+
+    def testEnableAudioReturnChannel(self):
+        """Checks whether Audio Return Channel can be enabled."""
+        port_infos = self.dut.hal.tv_cec.getPortInfo()
+        for port_info in port_infos:
+            if "portId" in port_info and port_info.get("arcSupported"):
+                self.dut.hal.tv_cec.enableAudioReturnChannel(
+                        port_info["portId"], True)
+
+    def testIsConnected(self):
+        """A simple test case which queries the connected status."""
+        status = self.dut.hal.tv_cec.isConnected()
+        logging.info("isConnected status: %s", status)
 
 if __name__ == "__main__":
     test_runner.main()
