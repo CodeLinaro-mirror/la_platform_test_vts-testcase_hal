@@ -1,6 +1,3 @@
-// This file was auto-generated. Do not edit manually.
-// Use test/vts-testcase/hal/update_makefiles.py to generate this file.
-
 // Generate .vts spec files.
 hal2vts {
     name: "android.hardware.{HAL_NAME}@{HAL_VERSION}-vts.spec",
@@ -51,6 +48,7 @@ cc_library_shared {
         "libcutils",
         "libvts_common",
         "libvts_datatype",
+        "libvts_drivercomm",
         "libvts_measurement",
         "libvts_multidevice_proto",
         "libcamera_metadata",
