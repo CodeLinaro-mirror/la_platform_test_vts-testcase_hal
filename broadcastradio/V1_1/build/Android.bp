@@ -8,6 +8,7 @@ hal2vts {
         ":android.hardware.broadcastradio@1.1_hal",
     ],
     out: [
+        "android/hardware/broadcastradio/1.1/BroadcastRadio.vts",
         "android/hardware/broadcastradio/1.1/BroadcastRadioFactory.vts",
         "android/hardware/broadcastradio/1.1/Tuner.vts",
         "android/hardware/broadcastradio/1.1/TunerCallback.vts",
@@ -17,13 +18,14 @@ hal2vts {
 
 // Build VTS driver.
 genrule {
-    name: "android.hardware.broadcastradio.vts.driver@1.1_genc++",
+    name: "android.hardware.broadcastradio@1.1-vts.driver_genc++",
     tools: ["hidl-gen", "vtsc"],
     cmd: "$(location hidl-gen) -o $(genDir) -Lvts -randroid.hardware:hardware/interfaces -randroid.hidl:system/libhidl/transport android.hardware.broadcastradio@1.1 && $(location vtsc) -mDRIVER -tSOURCE -b$(genDir) android/hardware/broadcastradio/1.1/ $(genDir)/android/hardware/broadcastradio/1.1/",
     srcs: [
         ":android.hardware.broadcastradio@1.1_hal",
     ],
     out: [
+        "android/hardware/broadcastradio/1.1/BroadcastRadio.vts.cpp",
         "android/hardware/broadcastradio/1.1/BroadcastRadioFactory.vts.cpp",
         "android/hardware/broadcastradio/1.1/Tuner.vts.cpp",
         "android/hardware/broadcastradio/1.1/TunerCallback.vts.cpp",
@@ -32,13 +34,14 @@ genrule {
 }
 
 genrule {
-    name: "android.hardware.broadcastradio.vts.driver@1.1_genc++_headers",
+    name: "android.hardware.broadcastradio@1.1-vts.driver_genc++_headers",
     tools: ["hidl-gen", "vtsc"],
     cmd: "$(location hidl-gen) -o $(genDir) -Lvts -randroid.hardware:hardware/interfaces -randroid.hidl:system/libhidl/transport android.hardware.broadcastradio@1.1 && $(location vtsc) -mDRIVER -tHEADER -b$(genDir) android/hardware/broadcastradio/1.1/ $(genDir)/android/hardware/broadcastradio/1.1/",
     srcs: [
         ":android.hardware.broadcastradio@1.1_hal",
     ],
     out: [
+        "android/hardware/broadcastradio/1.1/BroadcastRadio.vts.h",
         "android/hardware/broadcastradio/1.1/BroadcastRadioFactory.vts.h",
         "android/hardware/broadcastradio/1.1/Tuner.vts.h",
         "android/hardware/broadcastradio/1.1/TunerCallback.vts.h",
@@ -47,10 +50,10 @@ genrule {
 }
 
 cc_library_shared {
-    name: "android.hardware.broadcastradio.vts.driver@1.1",
-    generated_sources: ["android.hardware.broadcastradio.vts.driver@1.1_genc++"],
-    generated_headers: ["android.hardware.broadcastradio.vts.driver@1.1_genc++_headers"],
-    export_generated_headers: ["android.hardware.broadcastradio.vts.driver@1.1_genc++_headers"],
+    name: "android.hardware.broadcastradio@1.1-vts.driver",
+    generated_sources: ["android.hardware.broadcastradio@1.1-vts.driver_genc++"],
+    generated_headers: ["android.hardware.broadcastradio@1.1-vts.driver_genc++_headers"],
+    export_generated_headers: ["android.hardware.broadcastradio@1.1-vts.driver_genc++_headers"],
     shared_libs: [
         "libhidlbase",
         "libhidltransport",
@@ -67,12 +70,12 @@ cc_library_shared {
         "libprotobuf-cpp-full",
         "android.hardware.broadcastradio@1.1",
         "android.hardware.broadcastradio@1.0",
-        "android.hardware.broadcastradio.vts.driver@1.0",
+        "android.hardware.broadcastradio@1.0-vts.driver",
         "android.hidl.base@1.0",
     ],
     export_shared_lib_headers: [
         "android.hardware.broadcastradio@1.0",
-        "android.hardware.broadcastradio.vts.driver@1.0",
+        "android.hardware.broadcastradio@1.0-vts.driver",
         "android.hidl.base@1.0",
     ],
 }
@@ -86,6 +89,7 @@ genrule {
         ":android.hardware.broadcastradio@1.1_hal",
     ],
     out: [
+        "android/hardware/broadcastradio/1.1/BroadcastRadio.vts.cpp",
         "android/hardware/broadcastradio/1.1/BroadcastRadioFactory.vts.cpp",
         "android/hardware/broadcastradio/1.1/Tuner.vts.cpp",
         "android/hardware/broadcastradio/1.1/TunerCallback.vts.cpp",
@@ -101,6 +105,7 @@ genrule {
         ":android.hardware.broadcastradio@1.1_hal",
     ],
     out: [
+        "android/hardware/broadcastradio/1.1/BroadcastRadio.vts.h",
         "android/hardware/broadcastradio/1.1/BroadcastRadioFactory.vts.h",
         "android/hardware/broadcastradio/1.1/Tuner.vts.h",
         "android/hardware/broadcastradio/1.1/TunerCallback.vts.h",
