@@ -22,6 +22,7 @@ from vts.runners.host import asserts
 from vts.runners.host import base_test
 from vts.runners.host import test_runner
 from vts.utils.python.controllers import android_device
+from vts.utils.python.precondition import precondition_utils
 
 
 class SensorsHidlTest(base_test.BaseTestClass):
@@ -37,6 +38,10 @@ class SensorsHidlTest(base_test.BaseTestClass):
 
         self.dut.shell.InvokeTerminal("one")
         self.dut.shell.one.Execute("setenforce 0")  # SELinux permissive mode
+        if not precondition_utils.CanRunHidlHalTest(
+            self, self.dut, self.dut.shell.one):
+            self._skip_all_testcases = True
+            return
 
         # Test using the binderized mode
         self.dut.shell.one.Execute(
@@ -49,13 +54,13 @@ class SensorsHidlTest(base_test.BaseTestClass):
             target_package="android.hardware.sensors",
             target_component_name="ISensors",
             hw_binder_service_name=None,
-            bits=64 if self.dut.is64Bit else 32)
+            bits=int(self.abi_bitness))
 
     def tearDownClass(self):
         """ If profiling is enabled for the test, collect the profiling data
             and disable profiling after the test is done.
         """
-        if self.profiling.enabled:
+        if not self._skip_all_testcases and self.profiling.enabled:
             self.profiling.ProcessAndUploadTraceData()
 
     def setUp(self):
