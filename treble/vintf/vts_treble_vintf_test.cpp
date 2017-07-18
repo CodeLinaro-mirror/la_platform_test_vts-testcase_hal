@@ -89,11 +89,8 @@ static bool IsGoogleDefinedIface(const FQName &fq_iface_name) {
 
 // Returns true iff HAL interface is exempt from following rules:
 // 1. If an interface is declared in VINTF, it has to be served on the device.
-// TODO(b/62547028): remove these exemptions in O-DR.
 static bool IsExempt(const FQName &fq_iface_name) {
-  static const set<string> exempt_hals_ = {
-      "android.hardware.radio", "android.hardware.radio.deprecated",
-  };
+  static const set<string> exempt_hals_ = {};
   string hal_name = fq_iface_name.package();
   // Radio-releated and non-Google HAL interfaces are given exemptions.
   return exempt_hals_.find(hal_name) != exempt_hals_.end() ||
@@ -123,8 +120,8 @@ class VtsTrebleVintfTest : public ::testing::Test {
         << "Failed to get passthrough service manager." << endl;
 
     vendor_manifest_ = ::android::vintf::VintfObject::GetDeviceHalManifest();
-    ASSERT_NE(passthrough_manager_, nullptr)
-        << "Failed to get vendor HAL manifest." << endl;
+    ASSERT_NE(vendor_manifest_, nullptr) << "Failed to get vendor HAL manifest."
+                                         << endl;
   }
 
   // Applies given function to each HAL instance in VINTF.
@@ -242,7 +239,7 @@ TEST_F(VtsTrebleVintfTest, VintfHalsAreServed) {
     sp<android::hidl::base::V1_0::IBase> hal_service =
         GetHalService(fq_name, instance_name);
     EXPECT_NE(hal_service, nullptr)
-        << fq_name.package() << " not available." << endl;
+        << fq_name.string() << " not available." << endl;
   };
 
   ForEachHalInstance(is_available);
