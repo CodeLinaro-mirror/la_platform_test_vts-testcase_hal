@@ -26,7 +26,6 @@ cc_test {
         "libhidl-gen-hash",
         "libhidl-gen-utils",
         "libvintf",
-        "android.hidl.manager@1.0",
     ],
 }
 
