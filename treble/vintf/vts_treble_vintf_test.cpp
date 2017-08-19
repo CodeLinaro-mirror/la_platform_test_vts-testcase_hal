@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
+#include <chrono>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <map>
 #include <set>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <android/hidl/manager/1.0/IServiceManager.h>
@@ -40,6 +43,7 @@ using android::sp;
 using android::vintf::HalManifest;
 using android::vintf::Transport;
 using android::vintf::Version;
+using android::vintf::VintfObject;
 
 using std::cout;
 using std::endl;
@@ -119,9 +123,9 @@ class VtsTrebleVintfTest : public ::testing::Test {
     ASSERT_NE(passthrough_manager_, nullptr)
         << "Failed to get passthrough service manager." << endl;
 
-    vendor_manifest_ = ::android::vintf::VintfObject::GetDeviceHalManifest();
-    ASSERT_NE(vendor_manifest_, nullptr) << "Failed to get vendor HAL manifest."
-                                         << endl;
+    vendor_manifest_ = VintfObject::GetDeviceHalManifest();
+    ASSERT_NE(vendor_manifest_, nullptr)
+        << "Failed to get vendor HAL manifest." << endl;
   }
 
   // Applies given function to each HAL instance in VINTF.
@@ -152,7 +156,15 @@ void VtsTrebleVintfTest::ForEachHalInstance(HalVerifyFn fn) {
           string minor_ver = std::to_string(version.minorVer);
           string full_ver = major_ver + "." + minor_ver;
           FQName fq_name{hal_name, full_ver, iface_name};
-          fn(fq_name, instance_name);
+
+          auto future_result =
+              std::async([&]() { fn(fq_name, instance_name); });
+          auto timeout = std::chrono::milliseconds(500);
+          std::future_status status = future_result.wait_for(timeout);
+          if (status != std::future_status::ready) {
+            cout << "Timed out on: " << fq_name.string() << " " << instance_name
+                 << endl;
+          }
         }
       }
     }
@@ -297,6 +309,25 @@ TEST_F(VtsTrebleVintfTest, InterfacesAreReleased) {
   };
 
   ForEachHalInstance(is_released);
+}
+
+// Tests that vendor and framework are compatible.
+TEST(CompatiblityTest, VendorFrameworkCompatibility) {
+  string error;
+
+  EXPECT_TRUE(VintfObject::GetDeviceHalManifest()->checkCompatibility(
+      *VintfObject::GetFrameworkCompatibilityMatrix(), &error))
+      << error;
+
+  EXPECT_TRUE(VintfObject::GetFrameworkHalManifest()->checkCompatibility(
+      *VintfObject::GetDeviceCompatibilityMatrix(), &error))
+      << error;
+
+  EXPECT_TRUE(VintfObject::GetRuntimeInfo()->checkCompatibility(
+      *VintfObject::GetFrameworkCompatibilityMatrix(), &error))
+      << error;
+
+  EXPECT_EQ(0, VintfObject::CheckCompatibility({}, &error)) << error;
 }
 
 int main(int argc, char **argv) {
