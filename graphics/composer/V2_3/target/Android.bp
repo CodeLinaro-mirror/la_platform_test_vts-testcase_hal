@@ -15,5 +15,5 @@
 //
 
 vts_config {
-    name: "VtsHalKeymasterV4_0TargetProfiling",
+    name: "VtsHalGraphicsComposerV2_3Target",
 }
