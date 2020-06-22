@@ -62,6 +62,24 @@ TEST_F(DeviceManifestTest, ShippingFcmVersion) {
       << " (but is " << shipping_fcm_version << ")";
 }
 
+TEST_F(DeviceManifestTest, KernelFcmVersion) {
+  Level shipping_fcm_version = VintfObject::GetDeviceHalManifest()->level();
+  Level kernel_fcm_version = VintfObject::GetRuntimeInfo()->kernelLevel();
+
+  if (shipping_fcm_version == Level::UNSPECIFIED ||
+      shipping_fcm_version < Level::R) {
+    GTEST_SKIP() << "Kernel FCM version not enforced on target FCM version "
+                 << shipping_fcm_version;
+  }
+  ASSERT_NE(Level::UNSPECIFIED, kernel_fcm_version)
+      << "Kernel FCM version must be specified for target FCM version "
+      << shipping_fcm_version;
+  ASSERT_GE(kernel_fcm_version, shipping_fcm_version)
+      << "Kernel FCM version " << kernel_fcm_version
+      << " must be greater or equal to target FCM version "
+      << shipping_fcm_version;
+}
+
 // Tests that deprecated HALs are not in the manifest, unless a higher,
 // non-deprecated minor version is in the manifest.
 TEST_F(DeviceManifestTest, NoDeprecatedHalsOnManifest) {
@@ -70,20 +88,6 @@ TEST_F(DeviceManifestTest, NoDeprecatedHalsOnManifest) {
             VintfObject::GetInstance()->checkDeprecation(
                 HidlInterfaceMetadata::all(), &error))
       << error;
-}
-
-TEST_F(DeviceManifestTest, NoUnusedHalsOnManifest) {
-  auto vintf_object = VintfObject::GetInstance();
-  auto device_manifest = vintf_object->getDeviceHalManifest();
-  ASSERT_NE(nullptr, device_manifest);
-  auto target_fcm = device_manifest->level();
-  if (target_fcm == Level::UNSPECIFIED ||
-      target_fcm < kFcm2ApiLevelMap.at(30 /* R API Level */)) {
-    GTEST_SKIP() << "Skip NoUnusedHals on Target FCM " << to_string(target_fcm);
-  }
-  auto hidl_metadata = HidlInterfaceMetadata::all();
-  auto result = VintfObject::GetInstance()->checkUnusedHals(hidl_metadata);
-  EXPECT_TRUE(result.ok()) << result.error();
 }
 
 static std::vector<HalManifestPtr> GetTestManifests() {
