@@ -138,14 +138,14 @@ struct NativeInstance : private ManifestInstance {
 ostream& operator<<(ostream& os, const NativeInstance& val);
 
 // Sanitize a string so it can be used as a test case name.
-std::string SanitizeTestCaseName(std::string original);
+std::string SanitizeTestCaseName(const std::string& original);
 
 // Print test case name for SingleHidlTest and SingleAidlTest
 template <typename Test>
 std::string GetTestCaseSuffix(
     const ::testing::TestParamInfo<typename Test::ParamType>& info) {
   const auto& instance = std::get<0>(info.param);
-  return instance.test_case_name() + "_" + std::to_string(info.index);
+  return instance.test_case_name();
 }
 
 using HashCharArray = hidl_array<unsigned char, 32>;

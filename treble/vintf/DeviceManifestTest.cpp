@@ -65,8 +65,13 @@ TEST(FrameworkSupportTest, VendorApiLevel) {
       };
   // clang-format on
   uint64_t boardApiLevel = GetBoardApiLevel();
-  ASSERT_NE(boardApiLevel, 0u)
-      << "Device's board API level cannot be determined.";
+  if (boardApiLevel == 0u) {
+    if (GetVendorApiLevel() < static_cast<uint64_t>(Level::V)) {
+      GTEST_SKIP() << "ro.board.api_level was not required before Android V";
+    }
+    ASSERT_NE(boardApiLevel, 0u)
+        << "Device's board API level cannot be determined.";
+  }
   uint64_t buildVersionSdk =
       android::base::GetUintProperty<uint64_t>("ro.build.version.sdk", 0);
 
@@ -131,9 +136,19 @@ TEST_F(DeviceManifestTest, UnusedHals) {
   // custom instance names in the product/system_ext FCM, not visible in the
   // VTS test.
   constexpr bool shouldCheckInstanceName = false;
-  auto res = vintfObject->checkUnusedHals({}, [](const std::string& hal) {
-    return android::base::StartsWith(hal, "android.");
-  }, shouldCheckInstanceName);
+  const std::set<std::string> kExceptions = {
+      // This HAL is intended to be a framework HAL but has been declared
+      // by a lot of devices in the device manifest. So, it's not in the FCM
+      // in GSI.
+      "android.se.omapi",
+  };
+  auto res = vintfObject->checkUnusedHals(
+      {},
+      [&](const std::string& hal) {
+        if (kExceptions.find(hal) != kExceptions.end()) return false;
+        return android::base::StartsWith(hal, "android.");
+      },
+      shouldCheckInstanceName);
 
   if (!res.ok()) {
     uint64_t vendor_api_level = GetVendorApiLevel();
