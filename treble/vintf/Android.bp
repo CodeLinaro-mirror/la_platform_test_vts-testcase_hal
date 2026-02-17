@@ -44,6 +44,7 @@ cc_defaults {
         "libtinyxml2",
         "libvintf",
         "libvts_vintf_test_common",
+        "packagemanager_aidl-cpp",
     ],
     srcs: [
         "VtsTrebleVintfTestBase.cpp",
@@ -64,6 +65,7 @@ filegroup {
     srcs: [
         "aidl/android/vintf/ServiceInfo.aidl",
         "aidl/android/vintf/IServiceInfoFetcher.aidl",
+        "aidl/android/vintf/StabilityLevel.aidl",
     ],
     path: "aidl",
 }
