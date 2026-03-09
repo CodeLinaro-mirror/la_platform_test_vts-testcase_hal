@@ -62,6 +62,8 @@ TEST(FrameworkSupportTest, VendorApiLevel) {
            {Level::B, Level::V, Level::U, Level::T, Level::S}},
           {37 /* Android C */,
            {Level::C, Level::B, Level::V, Level::U, Level::T}},
+          {38 /* Android D */,
+           {Level::D, Level::C, Level::B, Level::V, Level::U}},
       };
   // clang-format on
   uint64_t boardApiLevel = GetBoardApiLevel();
@@ -81,19 +83,16 @@ TEST(FrameworkSupportTest, VendorApiLevel) {
       // During development it's common for devices to implement a newer vendor
       // API level before bumping the SDK API level. So if this is not a REL
       // device, also check the next SDKs supported vendor API levels.
+      // Note: this relies on the SDK levels always increasing in value.
       if (android::base::GetProperty("ro.build.version.codename", "") !=
           "REL") {
-        auto nextSdkVersion = buildVersionSdk + 1;
-        if (auto it = kSupportedVendorLevelPerSdkLevel.find(nextSdkVersion);
-            it != kSupportedVendorLevelPerSdkLevel.end()) {
+        while (++it != kSupportedVendorLevelPerSdkLevel.end()) {
           if (it->second.contains(static_cast<Level>(boardApiLevel))) {
             return;
           }
-        } else {
-          FAIL()
-              << "VTS testcase failure! We are not yet prepared for the next "
-              << "version of Android. This requires a test fix.";
         }
+        FAIL() << "VTS testcase failure! We are not yet prepared for the next "
+               << "version of Android. This requires a test fix.";
       }
 
       std::string acceptedBoardApis = android::base::Join(it->second, ",");
