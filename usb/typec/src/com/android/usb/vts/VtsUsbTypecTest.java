@@ -17,7 +17,6 @@
 package com.android.tests.usbtypec;
 
 import android.platform.test.annotations.RequiresDevice;
-import com.android.compatibility.common.util.PropertyUtil;
 import com.android.compatibility.common.util.VsrTest;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -37,6 +36,8 @@ import org.junit.runner.RunWith;
 @RunWith(DeviceJUnit4ClassRunner.class)
 public final class VtsUsbTypecTest extends BaseHostJUnit4Test {
     public static final String TAG = VtsUsbTypecTest.class.getSimpleName();
+
+    private static final String BOARD_API_LEVEL_PROP = "ro.board.api_level";
 
     private ITestDevice mDevice;
 
@@ -72,11 +73,11 @@ public final class VtsUsbTypecTest extends BaseHostJUnit4Test {
         mDevice = getDevice();
     }
 
-    private void assumeMinimumVsrApiLevel(long minApiLevel) throws Exception {
-        long vsrApiLevel = PropertyUtil.getVsrApiLevel(mDevice);
-        Assume.assumeTrue(String.format("Skip on devices with VSR API level (%d) less than %d",
-                                  vsrApiLevel, minApiLevel),
-                vsrApiLevel >= minApiLevel);
+    private void assumeMinimumBoardApiLevel(long minApiLevel) throws Exception {
+        long roBoardApiLevel = mDevice.getIntProperty(BOARD_API_LEVEL_PROP, -1);
+        Assume.assumeTrue(String.format("Skip on devices with %s (%d) less than %d",
+                                  BOARD_API_LEVEL_PROP, roBoardApiLevel, minApiLevel),
+                roBoardApiLevel >= minApiLevel);
     }
 
     private String joinToPath(String base, String file) {
@@ -200,7 +201,7 @@ public final class VtsUsbTypecTest extends BaseHostJUnit4Test {
     @RequiresDevice
     public void testTypecPortsAndChildrenHaveSelinuxLabel() throws Exception {
         // Test only applies for boards starting after 202604
-        assumeMinimumVsrApiLevel(202604);
+        assumeMinimumBoardApiLevel(202604);
 
         String vsrMessage = "VSR-5.4-0012: All systems must have at least one Type-C receptacle "
                 + "(port0 missing)";
@@ -252,7 +253,7 @@ public final class VtsUsbTypecTest extends BaseHostJUnit4Test {
     @RequiresDevice
     public void testThunderboltDevicesHaveSelinuxLabel() throws Exception {
         // Test only applies for boards starting after 202604
-        assumeMinimumVsrApiLevel(202604);
+        assumeMinimumBoardApiLevel(202604);
 
         // First make sure this platform actually has thunderbolt enabled.
         Assume.assumeTrue(mDevice.doesFileExist(SYSFS_THUNDERBOLT_PATH));
