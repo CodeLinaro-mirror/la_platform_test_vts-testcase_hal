@@ -60,8 +60,8 @@ TEST(FrameworkSupportTest, VendorApiLevel) {
            {Level::V, Level::U, Level::T, Level::S, Level::R}},
           {36 /* Android B */,
            {Level::B, Level::V, Level::U, Level::T, Level::S}},
-          {37 /* Android C - TODO(b/483500116) remove Level::D and allower newer board APIs */,
-           {Level::D, Level::C, Level::B, Level::V, Level::U, Level::T}},
+          {37 /* Android C */,
+           {Level::C, Level::B, Level::V, Level::U, Level::T}},
           {38 /* Android D */,
            {Level::D, Level::C, Level::B, Level::V, Level::U}},
       };
@@ -83,19 +83,16 @@ TEST(FrameworkSupportTest, VendorApiLevel) {
       // During development it's common for devices to implement a newer vendor
       // API level before bumping the SDK API level. So if this is not a REL
       // device, also check the next SDKs supported vendor API levels.
+      // Note: this relies on the SDK levels always increasing in value.
       if (android::base::GetProperty("ro.build.version.codename", "") !=
           "REL") {
-        auto nextSdkVersion = buildVersionSdk + 1;
-        if (auto it = kSupportedVendorLevelPerSdkLevel.find(nextSdkVersion);
-            it != kSupportedVendorLevelPerSdkLevel.end()) {
+        while (++it != kSupportedVendorLevelPerSdkLevel.end()) {
           if (it->second.contains(static_cast<Level>(boardApiLevel))) {
             return;
           }
-        } else {
-          FAIL()
-              << "VTS testcase failure! We are not yet prepared for the next "
-              << "version of Android. This requires a test fix.";
         }
+        FAIL() << "VTS testcase failure! We are not yet prepared for the next "
+               << "version of Android. This requires a test fix.";
       }
 
       std::string acceptedBoardApis = android::base::Join(it->second, ",");
@@ -403,6 +400,50 @@ TEST_F(DeviceManifestTest, AudioHal) {
       << "Device must have both Audio Core and Effect HALs of the same type";
   EXPECT_TRUE(has_hidl_core || has_aidl_core)
       << "Device must have either Audio HIDL HAL or AIDL HAL";
+}
+
+static bool IsEmulator() {
+  if (android::base::GetBoolProperty("ro.boot.qemu", false) ||
+      android::base::GetBoolProperty("ro.kernel.qemu", false)) {
+    return true;
+  }
+  std::string device = android::base::GetProperty("ro.product.device", "");
+  std::string model = android::base::GetProperty("ro.product.model", "");
+  std::string name = android::base::GetProperty("ro.product.name", "");
+  std::string hardware = android::base::GetProperty("ro.hardware", "");
+
+  return android::base::StartsWith(device, "vsoc_") ||
+         android::base::StartsWith(model, "Cuttlefish ") ||
+         android::base::StartsWith(name, "cf_") ||
+         android::base::StartsWith(name, "aosp_cf_") ||
+         android::base::StartsWith(hardware, "cutf") ||
+         android::base::StartsWith(hardware, "ranchu");
+}
+
+// Devices with Board API level 202604+ that support device mode (have a UDC)
+// must have the AIDL USB Gadget HAL.
+// @VsrTest = VSR-5.4-027
+TEST_F(DeviceManifestTest, UsbGadgetHal) {
+  if (IsEmulator()) {
+    GTEST_SKIP() << "Skip test on emulator";
+  }
+
+  uint64_t board_api_level = GetBoardApiLevel();
+  if (board_api_level < 202604) {
+    GTEST_SKIP() << "USB Gadget AIDL HAL is only required on Board API level "
+                    "202604 or later (current: "
+                 << board_api_level << ")";
+  }
+
+  std::string controller = android::base::GetProperty("sys.usb.controller", "");
+  if (controller.empty()) {
+    GTEST_SKIP() << "Device does not support USB device mode (no UDC)";
+  }
+
+  ASSERT_TRUE(vendor_manifest_->hasAidlInstance("android.hardware.usb.gadget",
+                                                "IUsbGadget", "default"))
+      << "Device must have the android.hardware.usb.gadget.IUsbGadget/default "
+         "HAL";
 }
 
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(SingleHidlTest);
